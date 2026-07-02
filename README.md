@@ -18,7 +18,7 @@
 ## 技术栈
 
 - Spring Boot
-- MyBatis-Flex（Mapper 继承 `BaseMapper`，Repository 继承 `ServiceImpl`）
+- MyBatis（核心仅依赖原生 MyBatis，推荐使用 MyBatis-Flex 或 MyBatis-Plus 作为效率提升扩展）
 
 ## 使用方式
 

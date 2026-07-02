@@ -2,7 +2,7 @@
 name: csrm
 description: |
   CSRM 四层架构规范（Controller → Service → Repository → Mapper），
-  用于 Spring Boot + MyBatis-Flex 项目。适合小型团队开发和维护中型 Java 项目。
+  用于 Spring Boot + MyBatis 项目（推荐使用 MyBatis-Flex 或 MyBatis-Plus）。适合小型团队开发和维护中型 Java 项目。
   当用户要求创建、修改或审查 Java 后端代码时，必须遵循此架构分层和调用规则。
 ---
 
@@ -163,11 +163,11 @@ public class UserService {
 
 **职责：封装数据访问逻辑，提供语义化的数据操作方法。**
 
-- 对于单表 CRUD 场景，**推荐**继承 MyBatis-Flex 的 `ServiceImpl<Mapper, Entity>`，减少模板代码
-- 对于跨表、跨 Mapper 的复合数据访问场景，**不需要继承基类**，直接注入所需的多个 Mapper 即可
+- 对于单表 CRUD 场景，如果使用 MyBatis-Flex 或 MyBatis-Plus，**推荐**继承其提供的 `ServiceImpl<Mapper, Entity>`（或对应的 Service 基类）以减少模板代码；若使用原生 MyBatis，则直接编写 CRUD 方法
+- 对于跨表、跨 Mapper 的复合数据访问场景，**不需要继承任何基类**，直接注入所需的多个 Mapper 即可
 - Repository 和 Mapper **不强制一对一**：一个 Repository 可以注入多个 Mapper 来完成跨表的数据访问
 - 对 Service 层暴露 **语义化的方法名**（如 `existsByUsername`、`pageByCondition`），屏蔽底层实现
-- 可组合 `QueryWrapper` 构建条件查询
+- 如果使用 MyBatis-Flex/MyBatis-Plus，可组合 `QueryWrapper` 构建条件查询；若为原生 MyBatis，则在 Repository 中组装参数调用 Mapper
 - 调用 **且仅调用** Mapper 层
 - 不包含业务逻辑判断
 
@@ -233,9 +233,9 @@ public class UserStatRepository {
 
 **职责：底层 SQL 映射，处理数据库交互。**
 
-- 对于单表 CRUD 场景，**推荐**继承 MyBatis-Flex 的 `BaseMapper<Entity>`，自动获得增删改查
-- 对于纯手写 SQL 的场景（如统计报表、复杂多表 JOIN），**不需要继承 BaseMapper**，直接定义接口方法 + XML 即可
-- 简单的单表条件查询由 Repository 层通过 `QueryWrapper` 完成，不需要在 Mapper 中手写
+- 对于单表 CRUD 场景，如果使用 MyBatis-Flex 或 MyBatis-Plus，**推荐**继承对应的 `BaseMapper<Entity>` 自动获得增删改查
+- 对于原生 MyBatis 或纯手写 SQL 的场景（如统计报表、复杂多表 JOIN），**不继承 BaseMapper**，直接定义接口方法，通过 XML 或注解进行数据库交互
+- 简单的单表条件查询在使用扩展框架时可通过 `QueryWrapper` 完成；若为原生 MyBatis，则在 Mapper 中定义简单查询或使用 XML
 - 对应的 XML 文件放在 `resources/mapper/` 目录下
 
 ```java
@@ -434,15 +434,15 @@ Controller 接收      Service 处理         Repository/Mapper 操作      Serv
 | 组件 | 选型 | 说明 |
 |------|------|------|
 | 框架 | Spring Boot | 约定优于配置 |
-| ORM | MyBatis-Flex | 轻量、灵活，`BaseMapper` 提供单表 CRUD，`QueryWrapper` 构建条件查询 |
-| Repository 基类 | `ServiceImpl<M, T>`（可选） | 单表 CRUD 场景推荐继承以减少模板代码；跨表场景可不继承 |
-| Mapper 基类 | `BaseMapper<T>`（可选） | 单表场景推荐继承；纯手写 SQL 场景可不继承 |
+| ORM | MyBatis | 核心仅依赖原生 MyBatis，推荐使用 MyBatis-Flex 或 MyBatis-Plus 以提升效率 |
+| Repository 基类 | `ServiceImpl<M, T>` 等（可选） | 仅在使用扩展框架且为单表 CRUD 场景时推荐继承；原生 MyBatis 或跨表场景无需继承 |
+| Mapper 基类 | `BaseMapper<T>` 等（可选） | 仅在使用扩展框架时单表场景推荐继承；原生 MyBatis 或手写 SQL 场景不继承 |
 
-### 7.1 为什么选 MyBatis-Flex 而不是 JPA
+### 7.1 为什么选择 MyBatis 体系而不是 JPA
 
 - MyBatis 体系更符合国内 Java 开发生态
-- SQL 可控，复杂查询不需要和框架博弈
-- MyBatis-Flex 的 `QueryWrapper` 提供了类似 JPA Criteria 的类型安全查询，同时保留 SQL 的灵活性
+- SQL 可控，复杂查询不需要和 ORM 框架过度博弈
+- 配合 MyBatis-Flex/MyBatis-Plus 的单表 CRUD 与类型安全查询（如 `QueryWrapper`），能够兼顾开发效率与 SQL 灵活性
 - 学习曲线平缓，团队上手快
 
 ---
@@ -457,9 +457,9 @@ Controller 接收      Service 处理         Repository/Mapper 操作      Serv
 4. **Controller 允许简单分发**：可以根据请求参数调用不同的 Service，但不包含业务逻辑
 5. **Service 可注入多个 Repository**：这是跨模块协调的唯一合法方式
 6. **Repository 与 Mapper 不强制一对一**：跨表数据访问场景，Repository 可注入多个 Mapper
-7. **继承基类是推荐而非强制**：单表 CRUD 推荐继承 `BaseMapper`/`ServiceImpl` 减少模板代码，跨表场景可以不继承
+7. **继承基类是推荐而非强制**：单表 CRUD 场景若使用 MyBatis-Flex/Plus 推荐继承相关基类，原生 MyBatis 或复杂多表场景无需继承
 8. **Entity 不出 Service 层**：Controller 层只接触 DTO 和 VO
-9. **简单查询用 QueryWrapper**：不需要在 Mapper 中写 XML
-10. **复杂 SQL 才写 Mapper XML**：多表 JOIN、子查询、统计等
+9. **条件查询处理**：若使用 MyBatis-Flex/Plus，单表简单查询使用 `QueryWrapper`，避免在 Mapper 中写 XML；若使用原生 MyBatis，则在 Mapper 中定义 SQL 并在 Repository 中调用
+10. **复杂 SQL 写 Mapper XML**：多表 JOIN、子查询、统计等均在 Mapper 中通过 XML 实现
 11. **common 放有状态组件，util 放无状态工具**
 12. **所有代码必须有清晰的中文注释**
