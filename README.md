@@ -22,7 +22,32 @@
 
 ## 使用方式
 
-本仓库是一个 [Antigravity Agent Skill](./SKILL.md)，将其放置到 `.agents/skills/csrm/` 目录下即可在 AI 辅助开发时自动遵循 CSRM 架构规范。
+本仓库提供了适配多种 AI 编码工具的规则文件，内容一致，格式各异。
+
+将本仓库克隆到项目根目录，或将对应文件复制到你的项目中即可：
+
+| 工具 | 规则文件 | 安装方式 |
+|------|---------|---------|
+| **Antigravity (agy)** | [`SKILL.md`](./SKILL.md) | 复制到 `.agents/skills/csrm/SKILL.md` |
+| **Claude Code (cc)** | [`CLAUDE.md`](./CLAUDE.md) | 复制到项目根目录 |
+| **Codex (codex)** | [`AGENTS.md`](./AGENTS.md) | 复制到项目根目录 |
+| **OpenCode (oc)** | [`AGENTS.md`](./AGENTS.md) | 复制到项目根目录（oc 兼容 AGENTS.md） |
+| **Cursor** | [`.cursor/rules/csrm.mdc`](./.cursor/rules/csrm.mdc) | 复制 `.cursor/` 目录到项目根目录 |
+
+### 🤖 AI 助手自动安装（推荐）
+
+你可以直接复制以下提示词发送给你的 AI 编码助手（如 Claude Code, Cursor 等），它会自动识别自己并完成下载与配置：
+
+```markdown
+请检查你当前运行的 AI 助手环境，并从开源仓库（https://github.com/xiongdi/csrm）自动下载对应的 CSRM 架构规范规则文件并配置到我当前的项目中：
+
+1. 如果你是 Antigravity (agy)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/SKILL.md` 下载并保存到 `.agents/skills/csrm/SKILL.md`。
+2. 如果你是 Claude Code (cc)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/CLAUDE.md` 下载并保存到项目根目录的 `CLAUDE.md`。
+3. 如果你是 Codex 或 OpenCode (oc)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/AGENTS.md` 下载并保存到项目根目录的 `AGENTS.md`。
+4. 如果你是 Cursor：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/.cursor/rules/csrm.mdc` 下载并保存到项目根目录的 `.cursor/rules/csrm.mdc`（若文件夹不存在请自动创建）。
+
+请使用你拥有的网络请求或终端工具（如 curl / wget / fetch / Python 脚本）获取文件内容，并在本地写入。完成安装后，向我确认。
+```
 
 ## License
 

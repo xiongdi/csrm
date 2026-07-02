@@ -1,0 +1,457 @@
+# CSRM 四层架构规范
+
+## 一、架构定位
+
+CSRM 是面向 **小型团队 + 中型项目** 的 Java 后端分层架构。
+
+| 架构 | 适用场景 | 痛点 |
+|------|---------|------|
+| 传统 MVC | 小型项目、简单 CRUD | 模块交互一多就混乱，Service 膨胀 |
+| DDD / COLA | 大型团队、复杂领域 | 学习成本极高，对开发者和产品经理的领域建模能力要求苛刻 |
+| **CSRM** | **小型团队、中型项目** | **填补 MVC 与 DDD 之间的空白，规则简单、上手快、边界清晰** |
+
+核心理念：**四层各司其职，严禁跨层调用，严禁同层调用。**
+
+---
+
+## 二、四层定义与职责
+
+```
+请求 → Controller → Service → Repository → Mapper → 数据库
+响应 ← Controller ← Service ← Repository ← Mapper ← 数据库
+```
+
+### 2.1 Controller（控制层）
+
+**职责：接收请求参数、校验格式、简单分发、调用 Service、封装返回结果。**
+
+- 处理 HTTP 请求/响应，负责参数绑定、格式校验（`@Valid`、`@NotNull` 等）
+- 调用 **且仅调用** Service 层
+- **允许简单的分发逻辑**：根据请求参数决定调用不同的 Service（如根据类型字段分发到不同的处理 Service）
+- 不包含业务逻辑（分发判断不算业务逻辑，业务逻辑是指数据处理和业务规则校验）
+- 负责统一返回结果的封装（如 `Result<T>`）
+- 处理路由映射（`@RequestMapping` 等）
+
+```java
+@RestController
+@RequestMapping("/api/user")
+public class UserController {
+
+    @Autowired
+    private UserService userService;
+
+    @PostMapping
+    public Result<UserVO> create(@RequestBody @Valid UserCreateDTO dto) {
+        return Result.success(userService.create(dto));
+    }
+
+    @GetMapping("/{id}")
+    public Result<UserVO> getById(@PathVariable Long id) {
+        return Result.success(userService.getById(id));
+    }
+
+    @GetMapping("/page")
+    public Result<Page<UserVO>> page(UserQueryDTO query) {
+        return Result.success(userService.page(query));
+    }
+}
+```
+
+```java
+// ✅ Controller 简单分发示例：根据请求参数调用不同的 Service
+@RestController
+@RequestMapping("/api/notification")
+public class NotificationController {
+
+    @Autowired
+    private SmsService smsService;
+
+    @Autowired
+    private EmailService emailService;
+
+    @PostMapping("/send")
+    public Result<Void> send(@RequestBody @Valid NotificationDTO dto) {
+        // 简单分发：根据通知类型调用不同的 Service
+        if ("sms".equals(dto.getChannel())) {
+            smsService.send(dto);
+        } else if ("email".equals(dto.getChannel())) {
+            emailService.send(dto);
+        }
+        return Result.success();
+    }
+}
+```
+
+### 2.2 Service（业务层）
+
+**职责：承载全部业务逻辑，协调多个 Repository 完成业务操作。**
+
+- 业务规则判断、数据组装、事务管理（`@Transactional`）
+- 调用 **且仅调用** Repository 层
+- 不直接操作数据库，不写 SQL
+- DTO → Entity 的转换在此层完成
+- Entity → VO 的转换在此层完成
+- 跨模块的业务协调在此层完成（一个 Service 可注入多个 Repository）
+
+```java
+@Service
+public class UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Transactional(rollbackFor = Exception.class)
+    public UserVO create(UserCreateDTO dto) {
+        // 业务校验
+        if (userRepository.existsByUsername(dto.getUsername())) {
+            throw new BusinessException("用户名已存在");
+        }
+
+        // DTO → Entity
+        User user = new User();
+        user.setUsername(dto.getUsername());
+        user.setEmail(dto.getEmail());
+        user.setPassword(PasswordUtil.encrypt(dto.getPassword()));
+
+        // 持久化
+        userRepository.save(user);
+
+        // 关联角色
+        if (CollUtil.isNotEmpty(dto.getRoleIds())) {
+            roleRepository.bindUserRoles(user.getId(), dto.getRoleIds());
+        }
+
+        // Entity → VO
+        return toVO(user);
+    }
+
+    public UserVO getById(Long id) {
+        User user = userRepository.getById(id);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        return toVO(user);
+    }
+
+    public Page<UserVO> page(UserQueryDTO query) {
+        Page<User> page = userRepository.pageByCondition(query);
+        return page.map(this::toVO);
+    }
+
+    private UserVO toVO(User user) {
+        UserVO vo = new UserVO();
+        vo.setId(user.getId());
+        vo.setUsername(user.getUsername());
+        vo.setEmail(user.getEmail());
+        return vo;
+    }
+}
+```
+
+### 2.3 Repository（仓储层）
+
+**职责：封装数据访问逻辑，提供语义化的数据操作方法。**
+
+- 对于单表 CRUD 场景，**推荐**继承 MyBatis-Flex 的 `ServiceImpl<Mapper, Entity>`，减少模板代码
+- 对于跨表、跨 Mapper 的复合数据访问场景，**不需要继承基类**，直接注入所需的多个 Mapper 即可
+- Repository 和 Mapper **不强制一对一**：一个 Repository 可以注入多个 Mapper 来完成跨表的数据访问
+- 对 Service 层暴露 **语义化的方法名**（如 `existsByUsername`、`pageByCondition`），屏蔽底层实现
+- 可组合 `QueryWrapper` 构建条件查询
+- 调用 **且仅调用** Mapper 层
+- 不包含业务逻辑判断
+
+```java
+// ✅ 方式一：继承 ServiceImpl，适用于单表 CRUD（推荐用于减少模板代码）
+@Component
+public class UserRepository extends ServiceImpl<UserMapper, User> {
+
+    public boolean existsByUsername(String username) {
+        return this.count(
+            QueryWrapper.create().eq(User::getUsername, username)
+        ) > 0;
+    }
+
+    public Page<User> pageByCondition(UserQueryDTO query) {
+        QueryWrapper wrapper = QueryWrapper.create()
+            .likeIfNotBlank(User::getUsername, query.getUsername())
+            .eqIfNotNull(User::getStatus, query.getStatus())
+            .orderBy(User::getCreateTime, false);
+        return this.page(new Page<>(query.getPageNum(), query.getPageSize()), wrapper);
+    }
+
+    public User getByUsername(String username) {
+        return this.getOne(
+            QueryWrapper.create().eq(User::getUsername, username)
+        );
+    }
+}
+```
+
+```java
+// ✅ 方式二：不继承基类，适用于跨表、跨 Mapper 的复合数据访问
+@Component
+public class UserStatRepository {
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private OrderMapper orderMapper;
+
+    @Autowired
+    private LoginLogMapper loginLogMapper;
+
+    /**
+     * 组合多个 Mapper 的数据，构建用户统计视图
+     */
+    public UserStatVO getUserStat(Long userId) {
+        User user = userMapper.selectOneById(userId);
+        int orderCount = orderMapper.countByUserId(userId);
+        LocalDateTime lastLogin = loginLogMapper.getLastLoginTime(userId);
+
+        UserStatVO stat = new UserStatVO();
+        stat.setUsername(user.getUsername());
+        stat.setOrderCount(orderCount);
+        stat.setLastLoginTime(lastLogin);
+        return stat;
+    }
+}
+```
+
+### 2.4 Mapper（映射层）
+
+**职责：底层 SQL 映射，处理数据库交互。**
+
+- 对于单表 CRUD 场景，**推荐**继承 MyBatis-Flex 的 `BaseMapper<Entity>`，自动获得增删改查
+- 对于纯手写 SQL 的场景（如统计报表、复杂多表 JOIN），**不需要继承 BaseMapper**，直接定义接口方法 + XML 即可
+- 简单的单表条件查询由 Repository 层通过 `QueryWrapper` 完成，不需要在 Mapper 中手写
+- 对应的 XML 文件放在 `resources/mapper/` 目录下
+
+```java
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+
+    /**
+     * 复杂查询示例：关联查询用户及其角色信息
+     */
+    List<UserWithRolesVO> selectUserWithRoles(@Param("userId") Long userId);
+}
+```
+
+```xml
+<!-- resources/mapper/UserMapper.xml -->
+<mapper namespace="com.example.mapper.UserMapper">
+    <select id="selectUserWithRoles" resultType="com.example.vo.UserWithRolesVO">
+        SELECT u.id, u.username, u.email, r.role_name
+        FROM t_user u
+        LEFT JOIN t_user_role ur ON u.id = ur.user_id
+        LEFT JOIN t_role r ON ur.role_id = r.id
+        WHERE u.id = #{userId}
+    </select>
+</mapper>
+```
+
+---
+
+## 三、调用规则（铁律）
+
+```
+Controller  ──→  Service  ──→  Repository  ──→  Mapper
+    ↓               ↓              ↓              ↓
+  只能调用        只能调用       只能调用       只能被调用
+  Service       Repository      Mapper        （最底层）
+```
+
+### 3.1 严禁跨层调用
+
+| 禁止行为 | 说明 |
+|---------|------|
+| Controller → Repository | Controller 不能绕过 Service 直接操作数据 |
+| Controller → Mapper | Controller 不能直接写 SQL |
+| Service → Mapper | Service 不能绕过 Repository 直接操作 Mapper |
+
+### 3.2 严禁同层调用
+
+| 禁止行为 | 说明 |
+|---------|------|
+| ServiceA → ServiceB | Service 之间不能互相调用，避免循环依赖和职责模糊 |
+| RepositoryA → RepositoryB | Repository 之间不能互相调用 |
+| ControllerA → ControllerB | Controller 之间不能互相调用 |
+
+### 3.3 跨模块协调方式
+
+当一个业务需要操作多个模块的数据时：
+
+```java
+// ✅ 正确：Service 注入多个 Repository
+@Service
+public class OrderService {
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private ProductRepository productRepository; // 跨模块协调
+
+    @Autowired
+    private UserRepository userRepository;       // 跨模块协调
+
+    @Transactional(rollbackFor = Exception.class)
+    public OrderVO createOrder(OrderCreateDTO dto) {
+        // 校验用户
+        User user = userRepository.getById(dto.getUserId());
+        // 校验商品库存
+        Product product = productRepository.getById(dto.getProductId());
+        // 创建订单...
+        // 扣减库存...
+    }
+}
+```
+
+```java
+// ❌ 错误：Service 调用另一个 Service
+@Service
+public class OrderService {
+    @Autowired
+    private UserService userService;  // 禁止！同层调用
+}
+```
+
+---
+
+## 四、包结构约定
+
+包结构分为两部分：**modules**（业务模块）和 **公共包**（common/util/config 等）。
+
+modules 内部**先按功能模块划分，再按技术层划分**：
+
+```
+com.example.project
+├── modules/                         # 业务模块（先按功能，再按技术）
+│   ├── user/                        # 用户模块
+│   │   ├── controller/
+│   │   │   └── UserController.java
+│   │   ├── service/
+│   │   │   └── UserService.java
+│   │   ├── repository/
+│   │   │   └── UserRepository.java
+│   │   ├── mapper/
+│   │   │   └── UserMapper.java
+│   │   ├── entity/
+│   │   │   └── User.java
+│   │   ├── dto/
+│   │   │   ├── UserCreateDTO.java
+│   │   │   └── UserQueryDTO.java
+│   │   └── vo/
+│   │       └── UserVO.java
+│   ├── order/                       # 订单模块
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── repository/
+│   │   ├── mapper/
+│   │   ├── entity/
+│   │   ├── dto/
+│   │   └── vo/
+│   └── product/                     # 商品模块
+│       └── ...
+├── common/                          # 有状态的公共组件
+│   ├── Result.java                  # 统一返回结构
+│   ├── BusinessException.java
+│   └── GlobalExceptionHandler.java
+├── util/                            # 无状态的工具类
+│   ├── PasswordUtil.java
+│   └── DateUtil.java
+└── config/                          # 配置类
+    ├── MybatisFlexConfig.java
+    └── WebMvcConfig.java
+```
+
+---
+
+## 五、命名规范
+
+### 5.1 类命名
+
+| 层 | 后缀 | 示例 |
+|----|------|------|
+| Controller | `Controller` | `UserController` |
+| Service | `Service` | `UserService` |
+| Repository | `Repository` | `UserRepository` |
+| Mapper | `Mapper` | `UserMapper` |
+| Entity | 无后缀（表名对应） | `User`、`Order` |
+| DTO | `DTO`（按用途细分） | `UserCreateDTO`、`UserQueryDTO` |
+| VO | `VO` | `UserVO`、`UserDetailVO` |
+
+### 5.2 方法命名
+
+| 层 | 方法风格 | 示例 |
+|----|---------|------|
+| Controller | RESTful 动词 | `create`、`update`、`delete`、`getById`、`page` |
+| Service | 业务语义 | `create`、`register`、`approve`、`page` |
+| Repository | 数据操作语义 | `getByUsername`、`existsByEmail`、`pageByCondition`、`countByStatus` |
+| Mapper | SQL 操作语义 | `selectUserWithRoles`、`batchInsert`、`updateStatusByIds` |
+
+### 5.3 数据对象流转
+
+```
+Controller 接收      Service 处理         Repository/Mapper 操作      Service 返回      Controller 响应
+    DTO        →      DTO → Entity       →       Entity          →   Entity → VO    →      VO
+```
+
+- **DTO**：前端传入的请求参数，仅在 Controller 和 Service 层流转
+- **Entity**：数据库实体，仅在 Service、Repository、Mapper 层流转
+- **VO**：返回给前端的视图对象，由 Service 层组装，在 Controller 层返回
+- **Entity 不能直接暴露给 Controller 层**
+
+---
+
+## 六、common 与 util 的边界
+
+| 维度 | common（有状态） | util（无状态） |
+|------|-----------------|---------------|
+| 特征 | 依赖 Spring 容器、持有状态或上下文 | 纯静态方法，不依赖任何注入 |
+| 示例 | `Result<T>`、`BusinessException`、`GlobalExceptionHandler`、`BaseEntity`、`CurrentUserHolder` | `PasswordUtil`、`DateUtil`、`StringUtil`、`JsonUtil` |
+| 注入 | 可以被 `@Autowired` | 不需要注入，直接 `Util.method()` 调用 |
+| 测试 | 可能需要 Spring 上下文 | 纯单元测试即可 |
+
+**判断标准：** 如果一个公共组件需要 `@Component`、`@Configuration` 或依赖 Spring Bean，放 `common/`；如果是纯工具方法，放 `util/`。
+
+---
+
+## 七、技术栈约定
+
+| 组件 | 选型 | 说明 |
+|------|------|------|
+| 框架 | Spring Boot | 约定优于配置 |
+| ORM | MyBatis-Flex | 轻量、灵活，`BaseMapper` 提供单表 CRUD，`QueryWrapper` 构建条件查询 |
+| Repository 基类 | `ServiceImpl<M, T>`（可选） | 单表 CRUD 场景推荐继承以减少模板代码；跨表场景可不继承 |
+| Mapper 基类 | `BaseMapper<T>`（可选） | 单表场景推荐继承；纯手写 SQL 场景可不继承 |
+
+### 7.1 为什么选 MyBatis-Flex 而不是 JPA
+
+- MyBatis 体系更符合国内 Java 开发生态
+- SQL 可控，复杂查询不需要和框架博弈
+- MyBatis-Flex 的 `QueryWrapper` 提供了类似 JPA Criteria 的类型安全查询，同时保留 SQL 的灵活性
+- 学习曲线平缓，团队上手快
+
+---
+
+## 八、代码生成要求
+
+当 AI 助手生成 CSRM 架构的代码时，必须遵循以下规则：
+
+1. **严格四层分离**：每个层的代码只能放在对应的包中
+2. **不跨层调用**：Controller 只调 Service，Service 只调 Repository，Repository 只调 Mapper
+3. **不同层调用**：同一层的类之间不互相注入
+4. **Controller 允许简单分发**：可以根据请求参数调用不同的 Service，但不包含业务逻辑
+5. **Service 可注入多个 Repository**：这是跨模块协调的唯一合法方式
+6. **Repository 与 Mapper 不强制一对一**：跨表数据访问场景，Repository 可注入多个 Mapper
+7. **继承基类是推荐而非强制**：单表 CRUD 推荐继承 `BaseMapper`/`ServiceImpl` 减少模板代码，跨表场景可以不继承
+8. **Entity 不出 Service 层**：Controller 层只接触 DTO 和 VO
+9. **简单查询用 QueryWrapper**：不需要在 Mapper 中写 XML
+10. **复杂 SQL 才写 Mapper XML**：多表 JOIN、子查询、统计等
+11. **common 放有状态组件，util 放无状态工具**
+12. **所有代码必须有清晰的中文注释**
