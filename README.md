@@ -2,7 +2,7 @@
 
 **Controller → Service → Repository → Mapper**
 
-面向中小团队 + 中型项目的 Java 后端四层架构规范。
+面向小型团队 + 中型项目的 Java 后端四层架构规范。
 
 ## 定位
 

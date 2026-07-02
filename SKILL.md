@@ -2,7 +2,7 @@
 name: csrm
 description: |
   CSRM 四层架构规范（Controller → Service → Repository → Mapper），
-  用于 Spring Boot + MyBatis-Flex 项目。适合中小团队开发和维护中型 Java 项目。
+  用于 Spring Boot + MyBatis-Flex 项目。适合小型团队开发和维护中型 Java 项目。
   当用户要求创建、修改或审查 Java 后端代码时，必须遵循此架构分层和调用规则。
 ---
 
@@ -10,13 +10,13 @@ description: |
 
 ## 一、架构定位
 
-CSRM 是面向 **中小团队 + 中型项目** 的 Java 后端分层架构。
+CSRM 是面向 **小型团队 + 中型项目** 的 Java 后端分层架构。
 
 | 架构 | 适用场景 | 痛点 |
 |------|---------|------|
 | 传统 MVC | 小型项目、简单 CRUD | 模块交互一多就混乱，Service 膨胀 |
 | DDD / COLA | 大型团队、复杂领域 | 学习成本极高，对开发者和产品经理的领域建模能力要求苛刻 |
-| **CSRM** | **中小团队、中型项目** | **填补 MVC 与 DDD 之间的空白，规则简单、上手快、边界清晰** |
+| **CSRM** | **小型团队、中型项目** | **填补 MVC 与 DDD 之间的空白，规则简单、上手快、边界清晰** |
 
 核心理念：**四层各司其职，严禁跨层调用，严禁同层调用。**
 
@@ -332,70 +332,49 @@ public class OrderService {
 
 ## 四、包结构约定
 
+包结构分为两部分：**modules**（业务模块）和 **公共包**（common/util/config 等）。
+
+modules 内部**先按功能模块划分，再按技术层划分**：
+
 ```
 com.example.project
-├── controller/              # Controller 层
-│   ├── UserController.java
-│   └── OrderController.java
-├── service/                 # Service 层
-│   ├── UserService.java
-│   └── OrderService.java
-├── repository/              # Repository 层
-│   ├── UserRepository.java
-│   └── OrderRepository.java
-├── mapper/                  # Mapper 层（接口）
-│   ├── UserMapper.java
-│   └── OrderMapper.java
-├── entity/                  # 数据库实体
-│   ├── User.java
-│   └── Order.java
-├── dto/                     # 请求参数对象（入参）
-│   ├── UserCreateDTO.java
-│   ├── UserQueryDTO.java
-│   └── OrderCreateDTO.java
-├── vo/                      # 返回视图对象（出参）
-│   ├── UserVO.java
-│   └── OrderVO.java
-├── common/                  # 有状态的公共组件
-│   ├── Result.java          # 统一返回结构
+├── modules/                         # 业务模块（先按功能，再按技术）
+│   ├── user/                        # 用户模块
+│   │   ├── controller/
+│   │   │   └── UserController.java
+│   │   ├── service/
+│   │   │   └── UserService.java
+│   │   ├── repository/
+│   │   │   └── UserRepository.java
+│   │   ├── mapper/
+│   │   │   └── UserMapper.java
+│   │   ├── entity/
+│   │   │   └── User.java
+│   │   ├── dto/
+│   │   │   ├── UserCreateDTO.java
+│   │   │   └── UserQueryDTO.java
+│   │   └── vo/
+│   │       └── UserVO.java
+│   ├── order/                       # 订单模块
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── repository/
+│   │   ├── mapper/
+│   │   ├── entity/
+│   │   ├── dto/
+│   │   └── vo/
+│   └── product/                     # 商品模块
+│       └── ...
+├── common/                          # 有状态的公共组件
+│   ├── Result.java                  # 统一返回结构
 │   ├── BusinessException.java
 │   └── GlobalExceptionHandler.java
-├── util/                    # 无状态的工具类
+├── util/                            # 无状态的工具类
 │   ├── PasswordUtil.java
 │   └── DateUtil.java
-└── config/                  # 配置类
+└── config/                          # 配置类
     ├── MybatisFlexConfig.java
     └── WebMvcConfig.java
-```
-
-### 4.1 模块化扩展（中大型项目）
-
-当模块增多时，按业务模块分子包：
-
-```
-com.example.project
-├── module/
-│   ├── user/
-│   │   ├── controller/
-│   │   ├── service/
-│   │   ├── repository/
-│   │   ├── mapper/
-│   │   ├── entity/
-│   │   ├── dto/
-│   │   └── vo/
-│   ├── order/
-│   │   ├── controller/
-│   │   ├── service/
-│   │   ├── repository/
-│   │   ├── mapper/
-│   │   ├── entity/
-│   │   ├── dto/
-│   │   └── vo/
-│   └── product/
-│       └── ...
-├── common/
-├── util/
-└── config/
 ```
 
 ---
