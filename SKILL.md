@@ -400,7 +400,7 @@ com.example.project
 │   ├── PasswordUtil.java
 │   └── DateUtil.java
 └── config/                          # 配置类
-    ├── MybatisFlexConfig.java
+    ├── MybatisConfig.java
     └── WebMvcConfig.java
 ```
 

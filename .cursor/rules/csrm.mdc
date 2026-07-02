@@ -6,7 +6,6 @@ alwaysApply: true
 
 # CSRM 四层架构规范
 
-
 ## 一、架构定位
 
 CSRM 是面向 **小型团队 + 中型项目** 的 Java 后端分层架构。
@@ -399,7 +398,7 @@ com.example.project
 │   ├── PasswordUtil.java
 │   └── DateUtil.java
 └── config/                          # 配置类
-    ├── MybatisFlexConfig.java
+    ├── MybatisConfig.java
     └── WebMvcConfig.java
 ```
 
