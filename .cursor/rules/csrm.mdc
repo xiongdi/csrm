@@ -1,4 +1,11 @@
+---
+description: "CSRM 四层架构规范，指导 Java 后端代码开发与分层校验（Controller -> Service -> Repository -> Mapper）"
+globs: ["**/*.java", "**/resources/mapper/**/*.xml"]
+alwaysApply: true
+---
+
 # CSRM 四层架构规范
+
 
 ## 一、架构定位
 

@@ -28,11 +28,11 @@
 
 | 工具 | 规则文件 | 安装方式 |
 |------|---------|---------|
-| **Antigravity (agy)** | [`SKILL.md`](./SKILL.md) | 复制到 `.agents/skills/csrm/SKILL.md` |
-| **Claude Code (cc)** | [`CLAUDE.md`](./CLAUDE.md) | 复制到项目根目录 |
-| **Codex (codex)** | [`AGENTS.md`](./AGENTS.md) | 复制到项目根目录 |
-| **OpenCode (oc)** | [`AGENTS.md`](./AGENTS.md) | 复制到项目根目录（oc 兼容 AGENTS.md） |
-| **Cursor** | [`.cursor/rules/csrm.mdc`](./.cursor/rules/csrm.mdc) | 复制 `.cursor/` 目录到项目根目录 |
+| **Antigravity (agy)** | [`AGENTS.md`](./AGENTS.md) | 复制并保存为项目根目录的 `.agents/AGENTS.md`（项目全局规则） |
+| **Claude Code (cc)** | [`CLAUDE.md`](./CLAUDE.md) | 复制并保存为项目根目录的 `CLAUDE.md` |
+| **Codex (codex)** | [`AGENTS.md`](./AGENTS.md) | 复制并保存为项目根目录的 `AGENTS.md` |
+| **OpenCode (oc)** | [`AGENTS.md`](./AGENTS.md) | 复制并保存为项目根目录的 `AGENTS.md`（oc 兼容 AGENTS.md） |
+| **Cursor** | [`.cursor/rules/csrm.mdc`](./.cursor/rules/csrm.mdc) | 复制并保存为项目根目录的 `.cursor/rules/csrm.mdc`（Cursor 自动匹配） |
 
 ### 🤖 AI 助手自动安装（推荐）
 
@@ -41,10 +41,10 @@
 ```markdown
 请检查你当前运行的 AI 助手环境，并从开源仓库（https://github.com/xiongdi/csrm）自动下载对应的 CSRM 架构规范规则文件并配置到我当前的项目中：
 
-1. 如果你是 Antigravity (agy)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/SKILL.md` 下载并保存到 `.agents/skills/csrm/SKILL.md`。
-2. 如果你是 Claude Code (cc)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/CLAUDE.md` 下载并保存到项目根目录的 `CLAUDE.md`。
-3. 如果你是 Codex 或 OpenCode (oc)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/AGENTS.md` 下载并保存到项目根目录的 `AGENTS.md`。
-4. 如果你是 Cursor：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/.cursor/rules/csrm.mdc` 下载并保存到项目根目录的 `.cursor/rules/csrm.mdc`（若文件夹不存在请自动创建）。
+1. 如果你是 Antigravity (agy)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/AGENTS.md` 下载并保存为项目根目录的 `.agents/AGENTS.md`（若文件夹不存在请自动创建）。
+2. 如果你是 Claude Code (cc)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/CLAUDE.md` 下载并保存为项目根目录的 `CLAUDE.md`。
+3. 如果你是 Codex 或 OpenCode (oc)：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/AGENTS.md` 下载并保存为项目根目录的 `AGENTS.md`。
+4. 如果你是 Cursor：从 `https://raw.githubusercontent.com/xiongdi/csrm/main/.cursor/rules/csrm.mdc` 下载并保存为项目根目录的 `.cursor/rules/csrm.mdc`（若文件夹不存在请自动创建）。
 
 请使用你拥有的网络请求或终端工具（如 curl / wget / fetch / Python 脚本）获取文件内容，并在本地写入。完成安装后，向我确认。
 ```
