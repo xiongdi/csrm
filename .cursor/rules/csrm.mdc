@@ -281,7 +281,15 @@ Controller  ──→  Service  ──→  Repository  ──→  Mapper
 | RepositoryA → RepositoryB | Repository 之间不能互相调用 |
 | ControllerA → ControllerB | Controller 之间不能互相调用 |
 
-### 3.3 跨模块协调方式
+### 3.3 下层注入与跨模块协调
+
+CSRM 架构中，**各层均允许注入/调用多个紧邻的下层组件（即 1 对多调用）**。这是处理复杂业务、跨模块业务协作以及复合数据访问的标准方式。
+
+- **Controller → 多个 Service**：Controller 可以注入多个 Service。用于简单分发（如通知分发器调用短信服务与邮件服务）或组合不同的业务响应。
+- **Service → 多个 Repository**：Service 可以注入多个 Repository。用于跨模块的业务流程协调与事务管理（这是唯一合法的跨模块数据操作方式）。
+- **Repository → 多个 Mapper**：Repository 可以注入多个 Mapper。用于跨表、复杂视图构建等复合数据访问场景。
+
+#### 示例 1：Service 协调多个 Repository（跨模块协同）
 
 当一个业务需要操作多个模块的数据时：
 
@@ -312,12 +320,31 @@ public class OrderService {
 ```
 
 ```java
-// ❌ 错误：Service 调用另一个 Service
+// ❌ 错误：Service 调用另一个 Service 试图跨模块
 @Service
 public class OrderService {
     @Autowired
     private UserService userService;  // 禁止！同层调用
 }
+```
+
+#### 示例 2：各层多路注入结构图
+
+```
+                ┌─── UserController ───┐
+                │ (注入多个 Service)   │
+                ▼                      ▼
+           UserService            OrderService
+                │                      │
+                ▼                      ▼
+        UserRepository  ────────► OrderRepository ◄─────── ProductRepository
+    (UserService只调UserRepo)    (OrderService注入并协调多个Repo)
+                                       │
+                                       ▼
+                              ┌─ OrderRepository ─┐
+                              │ (注入多个 Mapper) │
+                              ▼                   ▼
+                         OrderMapper         DetailMapper
 ```
 
 ---
@@ -446,12 +473,11 @@ Controller 接收      Service 处理         Repository/Mapper 操作      Serv
 1. **严格四层分离**：每个层的代码只能放在对应的包中
 2. **不跨层调用**：Controller 只调 Service，Service 只调 Repository，Repository 只调 Mapper
 3. **不同层调用**：同一层的类之间不互相注入
-4. **Controller 允许简单分发**：可以根据请求参数调用不同的 Service，但不包含业务逻辑
-5. **Service 可注入多个 Repository**：这是跨模块协调的唯一合法方式
-6. **Repository 与 Mapper 不强制一对一**：跨表数据访问场景，Repository 可注入多个 Mapper
+4. **多路注入规则**：各层均允许注入多个紧邻的下层组件（Controller 调多个 Service，Service 调多个 Repository，Repository 调多个 Mapper）
+5. **严禁同层与跨层调用**：下层组件绝对不能反向或跨层调用上层，同层组件（如 ServiceA 与 ServiceB）绝对不能互相注入或调用
+6. **Entity 不出 Service 层**：Controller 层只接触 DTO 和 VO，不得直接暴露 Entity
 7. **继承基类是推荐而非强制**：单表 CRUD 场景若使用 MyBatis-Flex/Plus 推荐继承相关基类，原生 MyBatis 或复杂多表场景无需继承
-8. **Entity 不出 Service 层**：Controller 层只接触 DTO 和 VO
-9. **条件查询处理**：若使用 MyBatis-Flex/Plus，单表简单查询使用 `QueryWrapper`，避免在 Mapper 中写 XML；若使用原生 MyBatis，则在 Mapper 中定义 SQL 并在 Repository 中调用
-10. **复杂 SQL 写 Mapper XML**：多表 JOIN、子查询、统计等均在 Mapper 中通过 XML 实现
-11. **common 放有状态组件，util 放无状态工具**
-12. **所有代码必须有清晰的中文注释**
+8. **条件查询处理**：若使用 MyBatis-Flex/Plus，单表简单查询使用 `QueryWrapper`，避免在 Mapper 中写 XML；若使用原生 MyBatis，则在 Mapper 中定义 SQL 并在 Repository 中调用
+9. **复杂 SQL 写 Mapper XML**：多表 JOIN、子查询、统计等均在 Mapper 中通过 XML 实现
+10. **common 放有状态组件，util 放无状态工具**
+11. **所有代码必须有清晰的中文注释**
